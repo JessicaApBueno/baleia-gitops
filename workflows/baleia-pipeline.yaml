@@ -1,0 +1,108 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: baleia-pipeline
+  namespace: argo
+spec:
+  entrypoint: main
+  serviceAccountName: argo-admin
+  
+  volumeClaimTemplates:
+    - metadata:
+        name: workdir
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+
+  templates:
+    - name: main
+      dag:
+        tasks:
+          - name: download-zip
+            template: download-source
+          
+          # Como baixamos o zip, não temos a pasta .git para pegar o hash.
+          # Vamos criar um hash falso baseado na data para não quebrar o pipeline.
+          - name: generate-tag
+            dependencies: [download-zip]
+            template: generate-tag
+          
+          - name: build-and-push
+            dependencies: [generate-tag]
+            template: kaniko-build
+            arguments:
+              parameters:
+                - name: image_tag
+                  value: "{{tasks.generate-tag.outputs.parameters.image_tag}}"
+
+    # ETAPA NOVA: Baixa o ZIP em vez de clonar
+    - name: download-source
+      container:
+        image: alpine:latest
+        workingDir: /src
+        command: [sh, -c]
+        # 1. Instala unzip e wget
+        # 2. Baixa o ZIP da branch main
+        # 3. Descompacta e move os arquivos para a pasta certa
+        args:
+          - >-
+            apk add --no-cache unzip wget &&
+            rm -rf ./* &&
+            echo "Baixando codigo..." &&
+            wget -O repo.zip https://github.com/JessicaApBueno/Docker-githubActions/archive/refs/heads/main.zip &&
+            unzip repo.zip &&
+            mv Docker-githubActions-main/* . &&
+            rm -rf Docker-githubActions-main repo.zip &&
+            ls -la
+        volumeMounts:
+          - name: workdir
+            mountPath: /src
+
+    # ETAPA AJUSTADA: Gera uma tag baseada na DATA (já que não temos git hash)
+    - name: generate-tag
+      container:
+        image: alpine:latest
+        command: [sh, -c]
+        args: ["date +%Y%m%d-%H%M%S | tr -d '\n' > /tmp/image_tag.txt"]
+      outputs:
+        parameters:
+          - name: image_tag
+            valueFrom:
+              path: /tmp/image_tag.txt
+
+    - name: kaniko-build
+      retryStrategy:
+        limit: "2"
+        retryPolicy: "Always"
+      inputs:
+        parameters:
+          - name: image_tag
+      container:
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+          - "--context=/src"
+          - "--dockerfile=Dockerfile"
+          # Usa a tag de data gerada acima
+          - "--destination=jessicaapbueno/baleia:{{inputs.parameters.image_tag}}"
+          - "--destination=jessicaapbueno/baleia:latest"
+          - "--ignore-path=/product_uuid"
+          - "--ignore-path=/proc"
+          - "--ignore-path=/dev"
+          - "--ignore-path=/sys"
+          - "--image-download-retry=5"
+          - "--compressed-caching=false"
+        volumeMounts:
+          - name: workdir
+            mountPath: /src
+          - name: docker-config
+            mountPath: /kaniko/.docker/
+
+  volumes:
+    - name: docker-config
+      secret:
+        secretName: dockerhub-config
+        items:
+          - key: .dockerconfigjson
+            path: config.json
