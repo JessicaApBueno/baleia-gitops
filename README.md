@@ -43,6 +43,9 @@ Durante a implementação deste laboratório em ambiente local (Linux Mint + Kin
 ---
 **Status do Projeto:** ✅ Pipeline de Build e Push concluído com sucesso.
 
+<img width="1012" height="411" alt="image" src="https://github.com/user-attachments/assets/ffa1b2f1-e54a-4f76-9bf2-fc99fa12062b" />
+
 <img width="1363" height="684" alt="image" src="https://github.com/user-attachments/assets/79f33d29-331f-4b8c-9373-cc876a84d268" />
 <img width="1355" height="687" alt="image" src="https://github.com/user-attachments/assets/78b68e9a-2a22-4b55-84e2-2d695d183020" />
 <img width="1350" height="453" alt="image" src="https://github.com/user-attachments/assets/6feed717-1a23-4542-876a-332e45ff38b1" />
+
